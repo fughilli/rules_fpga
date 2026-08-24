@@ -161,17 +161,30 @@ def _build_exe(ctx, gen, trace_mode):
         user_compile_flags = ["-std=gnu++20", "-fcoroutines", "-Os", "-Wno-attributes"],
     )
 
-    linking_outputs = cc_common.link(
-        actions = ctx.actions,
-        feature_configuration = feature_config,
-        cc_toolchain = cc_toolchain,
-        compilation_outputs = compilation_outputs,
-        name = ctx.label.name,
-        output_type = "executable",
-        user_link_flags = link_flags,
-        additional_inputs = depset(link_inputs),
+    # Link with the toolchain's g++ driver directly, passing objects explicitly.
+    # We avoid cc_common.link because it wraps the object tree in
+    # -Wl,--start-lib/--end-lib, which only gold/lld accept -- macOS ld64 and BFD
+    # ld reject it. An explicit object list works with every system linker, and
+    # the g++ driver still supplies crt/libstdc++/rpath.
+    objects = compilation_outputs.objects or compilation_outputs.pic_objects
+    obj_args = [
+        '"%s"/*.o' % o.path if o.is_directory else '"%s"' % o.path
+        for o in objects
+    ]
+    exe = ctx.actions.declare_file(ctx.label.name)
+    ctx.actions.run_shell(
+        inputs = depset(direct = objects + link_inputs, transitive = [cc_toolchain.all_files]),
+        outputs = [exe],
+        command = 'set -e; "{cxx}" -o "{exe}" {objs} {flags}'.format(
+            cxx = cc_toolchain.compiler_executable,
+            exe = exe.path,
+            objs = " ".join(obj_args),
+            flags = " ".join(["-pthread", "-lm"] + link_flags),
+        ),
+        mnemonic = "VerilogLink",
+        progress_message = "Linking %s" % ctx.label,
     )
-    return linking_outputs.executable
+    return exe
 
 # Attributes + rule bits shared by verilog_test and verilog_trace.
 _SIM_ATTRS = {

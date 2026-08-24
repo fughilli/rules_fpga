@@ -97,8 +97,6 @@ nix_cc_toolchain_config = rule(
         "target_cpu": attr.string(default = "local"),
         "builtin_includes": attr.string_list(default = ["/nix/store"]),
         "compile_flags": attr.string_list(default = ["-std=gnu++20", "-fno-strict-aliasing"]),
-        # gold (from the same binutils) supports the --start-lib/--end-lib object
-        # grouping Bazel emits at link; BFD ld does not.
-        "link_flags": attr.string_list(default = ["-fuse-ld=gold", "-pthread", "-lm", "-latomic"]),
+        "link_flags": attr.string_list(default = ["-pthread", "-lm"]),
     },
 )
