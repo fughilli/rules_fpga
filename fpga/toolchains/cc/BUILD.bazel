@@ -1,6 +1,15 @@
-# The cc_toolchain_config rule is loaded by the Nix `cc_toolchain` repo's
-# injected BUILD file (nix/cc_toolchain.BUILD), which defines the cc_toolchain +
-# toolchain() next to the tools so tool_paths resolve as `bin/g++` etc.
+# Dedicated cc toolchain TYPE for the Verilator C++ compile/link, plus the
+# toolchain() binding the Nix cc_toolchain (@cc_toolchain//:nix_cc, defined next
+# to the tools) under it. Using a private type -- not
+# @bazel_tools//tools/cpp:toolchain_type -- means that when rules_fpga is a
+# dependency, this Nix cc toolchain never participates in the consumer's host C++
+# toolchain resolution; only the sim rules request it.
 package(default_visibility = ["//visibility:public"])
 
-exports_files(glob(["*.bzl"]))
+toolchain_type(name = "toolchain_type")
+
+toolchain(
+    name = "nix_cc_toolchain",
+    toolchain = "@cc_toolchain//:nix_cc",
+    toolchain_type = ":toolchain_type",
+)
