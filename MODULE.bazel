@@ -24,6 +24,11 @@ module(
 bazel_dep(name = "platforms", version = "1.1.0")
 bazel_dep(name = "bazel_skylib", version = "1.9.0")
 
+# rules_cc: find_cc_toolchain + cc_common, used to compile the Verilator-
+# generated C++ with Bazel's cc actions (see //fpga/rules:sim.bzl) against the
+# hand-written Nix cc_toolchain (//fpga/toolchains/cc).
+bazel_dep(name = "rules_cc", version = "0.2.22")
+
 # Only the *core* rules_nixpkgs module is on the BCR. We do not use
 # rules_nixpkgs_cc -- Verilator brings its own C++ compile via the Nix-provided
 # gcc/gnumake in the `verilator_env` bundle.
@@ -98,8 +103,9 @@ nix_pkg.attr(
     repo = "@nixpkgs",
 )
 
-# Verilator + its C++ build deps (gcc, gnumake, perl) merged into one bin/ tree,
-# so `--binary` mode works from a single PATH entry inside the test sandbox.
+# Verilator (+ perl for its driver, and zlib for the FST trace runtime). We
+# verilate with `--cc --main` and compile/link the result with the Nix
+# cc_toolchain (below), so no gcc/make is needed here.
 nix_pkg.file(
     name = "verilator_env",
     attr = "verilator-env",
@@ -125,9 +131,20 @@ nix_pkg.file(
     file = "//nix:wavepeek.nix",
     repo = "@nixpkgs",
 )
+
+# gcc + binutils bundle backing the hand-written cc_toolchain. Its injected
+# BUILD (nix/cc_toolchain.BUILD) defines the cc_toolchain + toolchain() targets.
+nix_pkg.file(
+    name = "cc_toolchain",
+    attr = "cc-toolchain",
+    build_file = "//nix:cc_toolchain.BUILD",
+    file = "//nix:cc_toolchain.nix",
+    repo = "@nixpkgs",
+)
 use_repo(
     nix_pkg,
     "apicula",
+    "cc_toolchain",
     "icestorm",
     "nextpnr",
     "openfpgaloader",
@@ -140,4 +157,5 @@ use_repo(
 register_toolchains(
     "//fpga/toolchains:ice40_toolchain",
     "//fpga/toolchains:gowin_toolchain",
+    "@cc_toolchain//:nix_cc_toolchain",
 )

@@ -1,0 +1,6 @@
+# The cc_toolchain_config rule is loaded by the Nix `cc_toolchain` repo's
+# injected BUILD file (nix/cc_toolchain.BUILD), which defines the cc_toolchain +
+# toolchain() next to the tools so tool_paths resolve as `bin/g++` etc.
+package(default_visibility = ["//visibility:public"])
+
+exports_files(glob(["*.bzl"]))

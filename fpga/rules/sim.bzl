@@ -1,10 +1,19 @@
-"""Waveform tooling: `verilog_trace` + `surfer`/`wavepeek` runnables + the
-`verilog_sim` convenience macro.
+"""Verilator simulation via Bazel's cc toolchain (no `make`).
 
-`verilog_trace` runs the Verilated design as a build action and captures a
-waveform artifact (.vcd/.fst). The testbench opts in with a TRACE-guarded dump
-block so the same tb stays fast under `verilog_test` (no trace) and dumps under
-`verilog_trace` (compiled with --trace + `+define+TRACE`):
+The design is Verilated with `verilator --cc --main` (C++ output + a generated
+main), then the generated tree plus the Verilator runtime sources are compiled
+and linked by Bazel's cc actions against the hand-written Nix cc_toolchain
+(//fpga/toolchains/cc). That gives per-object caching, Bazel parallelism, and
+remote-execution compatibility -- none of which Verilator's internal `make` had.
+
+  verilog_test   -- build the sim exe (no trace) and run it as a Bazel test.
+  verilog_trace  -- build the sim exe with tracing, run it, capture .vcd/.fst.
+  surfer/wavepeek -- view / query a trace.
+  verilog_sim    -- macro wiring .test/.trace/.surfer/.wavepeek for one tb.
+
+A traceable testbench opts in with a TRACE-guarded dump block, so the same tb is
+trace-free (and cheaper to build) under verilog_test and dumps under
+verilog_trace (which verilates with --trace + `+define+TRACE`):
 
     `ifdef TRACE
       initial begin
@@ -12,14 +21,16 @@ block so the same tb stays fast under `verilog_test` (no trace) and dumps under
         $dumpvars(0, my_tb);
       end
     `endif
-
-`surfer` opens a trace in the Surfer GUI (or `surver` headless server); `wavepeek`
-runs the agent-oriented query CLI over it (`bazel run :x_wavepeek -- value ...`).
-`verilog_sim` wires a test + trace + both viewers for one testbench in one call.
 """
 
+load("@rules_cc//cc:find_cc_toolchain.bzl", "find_cc_toolchain", "use_cc_toolchain")
 load(":providers.bzl", "VerilogInfo", "VerilogTraceInfo")
-load(":verilog_test.bzl", "verilog_test")
+
+# ---------------------------------------------------------------------------
+# Verilate (--cc --main) -> compile+link with Bazel's cc toolchain.
+# ---------------------------------------------------------------------------
+
+_PREFIX = "Vsim"
 
 def _sources(ctx):
     """(srcs, includes, defines) depsets for the tb + deps."""
@@ -34,61 +45,196 @@ def _sources(ctx):
     )
     return srcs, incs, defs
 
-def _verilog_trace_impl(ctx):
+def _verilate(ctx, trace_mode):
+    """Run `verilator --cc --main`, returning the generated-sources tree artifact."""
     srcs, incs, defs = _sources(ctx)
-    ext = "vcd" if ctx.attr.format == "vcd" else "fst"
-    trace = ctx.actions.declare_file(ctx.label.name + "." + ext)
-    verilator = ctx.file._verilator
-    trace_flag = "--trace" if ctx.attr.format == "vcd" else "--trace-fst"
+    gen = ctx.actions.declare_directory(ctx.label.name + ".verilated")
 
-    parts = [
-        '"$VERILATOR"',
-        "--binary",
-        trace_flag,
-        "--timing",
-        "-j",
-        "0",
-        "-Wno-fatal",
-        "+define+TRACE",
-        "--top-module",
-        ctx.attr.top,
-        "--Mdir",
-        '"$OBJ"',
-        "-o",
-        "sim",
-    ]
+    args = ctx.actions.args()
+    args.add_all(["--cc", "--main", "--timing", "-Wno-fatal"])
+    args.add("-Mdir", gen.path)
+    args.add("--prefix", _PREFIX)
+    args.add("--top-module", ctx.attr.top)
+    if trace_mode == "vcd":
+        args.add_all(["--trace", "+define+TRACE"])
+    elif trace_mode == "fst":
+        args.add_all(["--trace-fst", "+define+TRACE"])
     for d in defs.to_list():
-        parts.append("+define+" + d)
+        args.add("+define+" + d)
     for i in incs.to_list():
-        parts.append("+incdir+" + i)
-    for s in srcs.to_list():
-        parts.append('"%s"' % s.path)
-
-    script = """#!/usr/bin/env bash
-set -euo pipefail
-VERILATOR="{verilator}"
-# Bundled gcc/make/perl live next to verilator; put them on PATH for --binary.
-export PATH="$(dirname "$VERILATOR"):$PATH"
-OBJ="$(mktemp -d)"
-RUN="$(mktemp -d)"
-trap 'rm -rf "$OBJ" "$RUN"' EXIT
-{cmd}
-# The testbench's $dumpfile("dump") writes into the sim's CWD.
-( cd "$RUN" && "$OBJ/sim" )
-cp "$RUN/dump" "{out}"
-""".format(
-        verilator = verilator.path,
-        cmd = " ".join(parts),
-        out = trace.path,
-    )
-
-    runner = ctx.actions.declare_file(ctx.label.name + "_gen_trace.sh")
-    ctx.actions.write(output = runner, is_executable = True, content = script)
+        args.add("+incdir+" + i)
+    args.add_all(srcs)
 
     ctx.actions.run(
-        executable = runner,
+        executable = ctx.file._verilator,
+        arguments = [args],
         inputs = depset(transitive = [srcs, ctx.attr._verilator_env.files]),
+        outputs = [gen],
+        mnemonic = "Verilate",
+        progress_message = "Verilating %s" % ctx.label,
+    )
+    return gen
+
+# VM_* defines matching how the model was verilated (see verilated.mk).
+_BASE_DEFINES = ["VM_COVERAGE=0", "VM_SC=0", "VM_TIMING=1", "VM_TRACE_SAIF=0", "VL_TIME_CONTEXT"]
+_TRACE_DEFINES = {
+    "none": ["VM_TRACE=0", "VM_TRACE_VCD=0", "VM_TRACE_FST=0"],
+    "vcd": ["VM_TRACE=1", "VM_TRACE_VCD=1", "VM_TRACE_FST=0"],
+    "fst": ["VM_TRACE=1", "VM_TRACE_VCD=0", "VM_TRACE_FST=1"],
+}
+
+def _dir_of(files, basename):
+    for f in files:
+        if f.basename == basename:
+            return f.dirname
+    fail("%s not found" % basename)
+
+def _split_sources(ctx, gen):
+    """Split the verilated tree into a .cpp-only srcs dir and a .h-only hdrs dir.
+
+    The compile action globs `*.cpp` from the srcs dir, so the generated
+    .h/.mk/.d are kept out of it; the .cpp reach their headers via -I<hdrs>.
+    """
+    gen_srcs = ctx.actions.declare_directory(ctx.label.name + ".srcs")
+    gen_hdrs = ctx.actions.declare_directory(ctx.label.name + ".hdrs")
+    ctx.actions.run_shell(
+        inputs = [gen],
+        outputs = [gen_srcs, gen_hdrs],
+        command = 'set -e; mkdir -p "{s}" "{h}"; cp "{g}"/*.cpp "{s}"/; cp "{g}"/*.h "{h}"/'.format(
+            g = gen.path,
+            s = gen_srcs.path,
+            h = gen_hdrs.path,
+        ),
+        mnemonic = "VerilateSplit",
+        progress_message = "Splitting verilated sources for %s" % ctx.label,
+    )
+    return gen_srcs, gen_hdrs
+
+def _build_exe(ctx, gen, trace_mode):
+    """Compile the generated model + Verilator runtime, then link an executable.
+
+    cc_common.compile ignores tree-artifact sources, and the verilated file set
+    is dynamic, so the model + runtime .cpp are compiled to an object *tree* by a
+    single g++ action (the cc_toolchain's compiler). cc_common.link then links
+    that object tree with the toolchain (crt/libstdc++/rpath handled for us).
+    """
+    gen_srcs, gen_hdrs = _split_sources(ctx, gen)
+    cc_toolchain = find_cc_toolchain(ctx)
+    feature_config = cc_common.configure_features(
+        ctx = ctx,
+        cc_toolchain = cc_toolchain,
+        requested_features = ctx.features,
+        unsupported_features = ctx.disabled_features,
+    )
+
+    # Runtime sources + FST-only zlib wiring, keyed on trace mode.
+    runtime = list(ctx.files._runtime_base)
+    compile_inputs = list(ctx.files._verilator_headers) + ctx.files._verilator_aux
+    include_flags = []
+    link_flags = []
+    link_inputs = []
+    if trace_mode == "vcd":
+        runtime += ctx.files._runtime_vcd
+    elif trace_mode == "fst":
+        runtime += ctx.files._runtime_fst
+        compile_inputs += ctx.files._zlib_headers
+        include_flags.append("-I" + _dir_of(ctx.files._zlib_headers, "zlib.h"))
+
+        # Statically link libz.a (positional), so the sim exe needs no runtime .so.
+        link_flags.append(ctx.files._zlib_lib[0].path)
+        link_inputs = ctx.files._zlib_lib
+
+    inc = _dir_of(ctx.files._runtime_base, "verilated.cpp")
+    include_flags = [
+        "-I" + gen_hdrs.path,
+        "-I" + inc,
+        "-I" + inc + "/vltstd",
+    ] + include_flags
+    define_flags = ["-D" + d for d in _BASE_DEFINES + _TRACE_DEFINES[trace_mode]]
+
+    # Compile model (tree) + runtime (files) -> object tree, using the toolchain g++.
+    objs = ctx.actions.declare_directory(ctx.label.name + ".objs")
+    cxx = ctx.file._cxx
+    flags = " ".join(include_flags + define_flags + ["-std=gnu++20", "-fcoroutines", "-Os", "-Wno-attributes"])
+    runtime_paths = " ".join(['"%s"' % f.path for f in runtime])
+    ctx.actions.run_shell(
+        inputs = depset(
+            direct = [gen_srcs, gen_hdrs] + runtime + compile_inputs,
+            transitive = [ctx.attr._cc_all.files],
+        ),
+        outputs = [objs],
+        command = ('set -e; mkdir -p "{o}"; ' +
+                   'for f in "{s}"/*.cpp {rt}; do ' +
+                   '"{cxx}" -c {flags} "$f" -o "{o}/$(basename "$f").o"; done').format(
+            o = objs.path,
+            s = gen_srcs.path,
+            rt = runtime_paths,
+            cxx = cxx.path,
+            flags = flags,
+        ),
+        mnemonic = "VerilatorCompile",
+        progress_message = "Compiling %s model + runtime" % ctx.label,
+    )
+
+    linking_outputs = cc_common.link(
+        actions = ctx.actions,
+        feature_configuration = feature_config,
+        cc_toolchain = cc_toolchain,
+        compilation_outputs = cc_common.create_compilation_outputs(objects = depset([objs])),
+        name = ctx.label.name,
+        output_type = "executable",
+        user_link_flags = link_flags,
+        additional_inputs = depset(link_inputs),
+    )
+    return linking_outputs.executable
+
+# Attributes + rule bits shared by verilog_test and verilog_trace.
+_SIM_ATTRS = {
+    "tb": attr.label(
+        mandatory = True,
+        allow_single_file = [".v", ".sv"],
+        doc = "Testbench source containing the top module (ends in $finish).",
+    ),
+    "top": attr.string(mandatory = True, doc = "Testbench top module name."),
+    "deps": attr.label_list(providers = [VerilogInfo], doc = "verilog_library targets under test."),
+    "srcs": attr.label_list(allow_files = [".v", ".sv"], doc = "Extra sources compiled into the sim."),
+    "defines": attr.string_list(),
+    "_verilator": attr.label(default = "@verilator_env//:verilator", allow_single_file = True, cfg = "exec"),
+    "_verilator_env": attr.label(default = "@verilator_env//:all", cfg = "exec"),
+    "_runtime_base": attr.label(default = "@verilator_env//:runtime_base", allow_files = True),
+    "_runtime_vcd": attr.label(default = "@verilator_env//:runtime_vcd", allow_files = True),
+    "_runtime_fst": attr.label(default = "@verilator_env//:runtime_fst", allow_files = True),
+    "_verilator_headers": attr.label(default = "@verilator_env//:headers", allow_files = True),
+    "_verilator_aux": attr.label(default = "@verilator_env//:aux_srcs", allow_files = True),
+    "_zlib_headers": attr.label(default = "@verilator_env//:zlib_headers", allow_files = True),
+    "_zlib_lib": attr.label(default = "@verilator_env//:zlib_lib", allow_files = True),
+    "_cxx": attr.label(default = "@cc_toolchain//:cxx", allow_single_file = True, cfg = "exec"),
+    "_cc_all": attr.label(default = "@cc_toolchain//:all", cfg = "exec"),
+}
+
+def _verilog_test_impl(ctx):
+    exe = _build_exe(ctx, _verilate(ctx, "none"), "none")
+    return [DefaultInfo(executable = exe)]
+
+verilog_test = rule(
+    implementation = _verilog_test_impl,
+    test = True,
+    doc = "Verilator simulation of a (System)Verilog testbench, built with Bazel's cc toolchain.",
+    attrs = _SIM_ATTRS,
+    toolchains = use_cc_toolchain(),
+    fragments = ["cpp"],
+)
+
+def _verilog_trace_impl(ctx):
+    exe = _build_exe(ctx, _verilate(ctx, ctx.attr.format), ctx.attr.format)
+    ext = "vcd" if ctx.attr.format == "vcd" else "fst"
+    trace = ctx.actions.declare_file(ctx.label.name + "." + ext)
+
+    # The exe's $dumpfile("dump") writes into the action's cwd (execroot); move it.
+    ctx.actions.run_shell(
+        inputs = [exe],
         outputs = [trace],
+        command = 'set -e; "%s"; cp dump "%s"' % (exe.path, trace.path),
         mnemonic = "VerilogTrace",
         progress_message = "Tracing %s (%s)" % (ctx.label, ext),
     )
@@ -101,31 +247,18 @@ cp "$RUN/dump" "{out}"
 verilog_trace = rule(
     implementation = _verilog_trace_impl,
     doc = "Runs a Verilator sim and captures a waveform trace (.vcd/.fst).",
-    attrs = {
-        "tb": attr.label(
-            mandatory = True,
-            allow_single_file = [".v", ".sv"],
-            doc = "Testbench with a TRACE-guarded $dumpfile(\"dump\")/$dumpvars block.",
-        ),
-        "top": attr.string(mandatory = True, doc = "Testbench top module name."),
-        "deps": attr.label_list(providers = [VerilogInfo]),
-        "srcs": attr.label_list(allow_files = [".v", ".sv"]),
-        "defines": attr.string_list(),
-        "format": attr.string(
-            default = "vcd",
-            values = ["vcd", "fst"],
-            doc = "Waveform format.",
-        ),
-        "_verilator": attr.label(
-            default = "@verilator_env//:verilator",
-            allow_single_file = True,
-            cfg = "exec",
-        ),
-        "_verilator_env": attr.label(default = "@verilator_env//:all", cfg = "exec"),
-    },
+    attrs = dict(_SIM_ATTRS, format = attr.string(
+        default = "vcd",
+        values = ["vcd", "fst"],
+        doc = "Waveform format.",
+    )),
+    toolchains = use_cc_toolchain(),
+    fragments = ["cpp"],
 )
 
-# --- Runnable viewers/queries ----------------------------------------------
+# ---------------------------------------------------------------------------
+# Runnable viewers / queries.
+# ---------------------------------------------------------------------------
 
 def _runfiles_path(ctx, f):
     """Path of `f` under a run target's $0.runfiles root."""
@@ -193,7 +326,7 @@ def _wavepeek_impl(ctx):
     trace = _trace_file(ctx)
 
     # wavepeek <subcommand> [flags] --waves <trace>. Forward the user's args and
-    # append --waves so `bazel run :x_wavepeek -- value --at 10ns --signals ...`
+    # append --waves so `bazel run :x.wavepeek -- value --at 10ns --signals ...`
     # just works.
     return _launcher(ctx, ctx.file._wavepeek, ctx.attr._wavepeek_files.files, trace, '"$@" --waves "$TRACE"')
 
@@ -213,7 +346,9 @@ wavepeek = rule(
     },
 )
 
-# --- Convenience macro ------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Convenience macro.
+# ---------------------------------------------------------------------------
 
 def verilog_sim(name, top, tb, deps = [], srcs = [], defines = [], format = "vcd", size = "small", **kwargs):
     """test + trace + surfer + wavepeek for one testbench.

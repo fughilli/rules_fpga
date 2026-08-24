@@ -9,11 +9,12 @@ in
 {
   verilator-env = pkgs.buildEnv {
     name = "verilator-env";
+    ignoreCollisions = true;
     paths = with pkgs; [
       verilator
-      gcc
-      gnumake
       perl
+      zlib.dev # zlib.h + zconf.h for the FST trace runtime (gtkwave/fstapi)
+      zlib.static # libz.a, statically linked so the sim exe needs no runtime .so
     ];
   };
 }

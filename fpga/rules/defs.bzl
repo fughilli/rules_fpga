@@ -21,11 +21,11 @@ load(
     ":sim.bzl",
     _surfer = "surfer",
     _verilog_sim = "verilog_sim",
+    _verilog_test = "verilog_test",
     _verilog_trace = "verilog_trace",
     _wavepeek = "wavepeek",
 )
 load(":verilog.bzl", _verilog_library = "verilog_library", _verilog_top = "verilog_top")
-load(":verilog_test.bzl", _verilog_test = "verilog_test")
 
 verilog_library = _verilog_library
 verilog_top = _verilog_top

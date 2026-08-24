@@ -97,6 +97,13 @@ bazel run //examples/led_cycle:led_cycle_sim.wavepeek -- \
 
 Both Surfer and wavepeek are vendored through Nix, so no manual install is needed.
 
+Simulations are Verilated with `verilator --cc --main` and then compiled + linked
+by **Bazel's own cc actions** against a hand-written Nix `cc_toolchain`
+(`//fpga/toolchains/cc`, backed by the Nix gcc/binutils) — not Verilator's
+internal `make`. So the build is Bazel-cached, parallel, and remote-exec friendly,
+and stays hermetic (the sim exe links libstdc++/glibc from the Nix store). The
+`.test` exe is prebuilt, so `bazel test` just runs it.
+
 ## How a board is targeted
 
 Boards are Bazel `platform()`s. Each declares a `//fpga/constraints:family` value
@@ -119,13 +126,13 @@ Shipped platforms: `//fpga/platforms:icebreaker`, `//fpga/platforms:tangnano9k`.
 
 ```
 fpga/
-  rules/        verilog_library/top/test, synthesizable_bitstream, fpga_flash, providers, board
-  toolchains/   fpga_toolchain rule + ice40/gowin toolchain() defs
+  rules/        verilog_library/top/test, synthesizable_bitstream, fpga_flash, sim (trace/surfer/wavepeek), providers, board
+  toolchains/   fpga_toolchain (ice40/gowin) + cc/ (Nix-backed cc_toolchain for Verilator)
   constraints/  family {ice40,gowin} + per-board constraint values
   platforms/    board platform() targets
   boards/       per-board device params + the platform→params select
-nix/            per-tool BUILD files + the verilator_env buildEnv expression
-examples/blinky one design → sim + iCEBreaker .bin + Tang Nano 9K .fs
+nix/            per-tool BUILD files + verilator_env / cc_toolchain / wavepeek Nix expressions
+examples/       blinky (bitstreams) + led_cycle (Tang Nano 9K + sim/trace/query)
 ```
 
 ## Building
