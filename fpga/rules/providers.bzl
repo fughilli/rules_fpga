@@ -31,6 +31,14 @@ FpgaBoardInfo = provider(
     },
 )
 
+VerilogTraceInfo = provider(
+    doc = "A simulation waveform trace produced by verilog_trace.",
+    fields = {
+        "trace": "File, the waveform (.vcd or .fst).",
+        "format": "str, 'vcd' or 'fst'.",
+    },
+)
+
 FpgaToolchainInfo = provider(
     doc = "Resolved open-source FPGA toolchain: binaries + invocation metadata.",
     fields = {

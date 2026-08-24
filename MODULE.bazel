@@ -107,13 +107,33 @@ nix_pkg.file(
     file = "//nix:verilator_env.nix",
     repo = "@nixpkgs",
 )
+
+# Surfer waveform viewer: GUI `surfer` + headless server `surver`.
+nix_pkg.attr(
+    name = "surfer",
+    attr = "surfer",
+    build_file = "//nix:surfer.BUILD",
+    repo = "@nixpkgs",
+)
+
+# wavepeek: agent-oriented VCD/FST query CLI. Not in nixpkgs -- fetched as the
+# upstream prebuilt release binary (see nix/wavepeek.nix).
+nix_pkg.file(
+    name = "wavepeek",
+    attr = "wavepeek",
+    build_file = "//nix:wavepeek.BUILD",
+    file = "//nix:wavepeek.nix",
+    repo = "@nixpkgs",
+)
 use_repo(
     nix_pkg,
     "apicula",
     "icestorm",
     "nextpnr",
     "openfpgaloader",
+    "surfer",
     "verilator_env",
+    "wavepeek",
     "yosys",
 )
 

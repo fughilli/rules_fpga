@@ -15,6 +15,14 @@ load(
     _FpgaToolchainInfo = "FpgaToolchainInfo",
     _VerilogInfo = "VerilogInfo",
     _VerilogTopInfo = "VerilogTopInfo",
+    _VerilogTraceInfo = "VerilogTraceInfo",
+)
+load(
+    ":sim.bzl",
+    _surfer = "surfer",
+    _verilog_sim = "verilog_sim",
+    _verilog_trace = "verilog_trace",
+    _wavepeek = "wavepeek",
 )
 load(":verilog.bzl", _verilog_library = "verilog_library", _verilog_top = "verilog_top")
 load(":verilog_test.bzl", _verilog_test = "verilog_test")
@@ -22,6 +30,10 @@ load(":verilog_test.bzl", _verilog_test = "verilog_test")
 verilog_library = _verilog_library
 verilog_top = _verilog_top
 verilog_test = _verilog_test
+verilog_trace = _verilog_trace
+verilog_sim = _verilog_sim
+surfer = _surfer
+wavepeek = _wavepeek
 synthesizable_bitstream = _synthesizable_bitstream
 fpga_flash = _fpga_flash
 fpga_board = _fpga_board
@@ -30,6 +42,7 @@ fpga_board_info = _fpga_board_info
 # Providers, for anyone writing rules on top of this ruleset.
 VerilogInfo = _VerilogInfo
 VerilogTopInfo = _VerilogTopInfo
+VerilogTraceInfo = _VerilogTraceInfo
 FpgaBoardInfo = _FpgaBoardInfo
 FpgaToolchainInfo = _FpgaToolchainInfo
 FpgaBitstreamInfo = _FpgaBitstreamInfo

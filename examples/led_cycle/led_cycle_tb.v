@@ -21,6 +21,15 @@ module led_cycle_tb;
 
     always #1 clk = ~clk;
 
+    // Dump a waveform when built by verilog_trace (which compiles with --trace
+    // and +define+TRACE). Harmless / excluded under verilog_test.
+`ifdef TRACE
+    initial begin
+        $dumpfile("dump");
+        $dumpvars(0, led_cycle_tb);
+    end
+`endif
+
     // Number of active (low) LEDs.
     function automatic int active_count(input logic [5:0] v);
         int n = 0;

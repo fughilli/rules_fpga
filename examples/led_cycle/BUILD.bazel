@@ -5,7 +5,7 @@ load(
     "fpga_flash",
     "synthesizable_bitstream",
     "verilog_library",
-    "verilog_test",
+    "verilog_sim",
     "verilog_top",
 )
 
@@ -22,9 +22,11 @@ verilog_top(
     deps = [":led_cycle"],
 )
 
-verilog_test(
-    name = "led_cycle_test",
-    size = "small",
+# Emits led_cycle_sim_test (Verilator validation), led_cycle_sim_trace (the .vcd
+# waveform artifact), led_cycle_sim_surfer (open in Surfer) and
+# led_cycle_sim_wavepeek (query with wavepeek).
+verilog_sim(
+    name = "led_cycle_sim",
     tb = "led_cycle_tb.v",
     top = "led_cycle_tb",
     deps = [":led_cycle"],

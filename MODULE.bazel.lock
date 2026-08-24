@@ -100,7 +100,7 @@
     "@@rules_nixpkgs_core~//extensions:package.bzl%nix_pkg%<root>~nix_pkg": {
       "general": {
         "bzlTransitiveDigest": "2alEQC7q9PgrArc8ZeI662VmDHLGfuswqnzBJvVDnmg=",
-        "usagesDigest": "ep28N8TwYZLp+it3un1Wn9aT3d4zdB4u+xXiaRtlbR4=",
+        "usagesDigest": "NMQXhl/JRbRxacywfjVNAKd6AB8K9a6cAYU1XTXqeCk=",
         "recordedFileInputs": {},
         "recordedDirentsInputs": {},
         "envVariables": {},
@@ -190,6 +190,23 @@
               "fail_not_supported": true
             }
           },
+          "surfer": {
+            "bzlFile": "@@rules_nixpkgs_core~//:nixpkgs.bzl",
+            "ruleClassName": "_nixpkgs_package",
+            "attributes": {
+              "unmangled_name": "surfer",
+              "attribute_path": "surfer",
+              "nix_file_deps": {},
+              "nix_file_content": "",
+              "repository": "@@rules_nixpkgs_core~~_nix_repo~~~nix_repo~nixpkgs//:nixpkgs",
+              "repositories": {},
+              "build_file": "@@//nix:surfer.BUILD",
+              "build_file_content": "",
+              "nixopts": [],
+              "quiet": false,
+              "fail_not_supported": true
+            }
+          },
           "verilator_env": {
             "bzlFile": "@@rules_nixpkgs_core~//:nixpkgs.bzl",
             "ruleClassName": "_nixpkgs_package",
@@ -207,6 +224,24 @@
               "quiet": false,
               "fail_not_supported": true
             }
+          },
+          "wavepeek": {
+            "bzlFile": "@@rules_nixpkgs_core~//:nixpkgs.bzl",
+            "ruleClassName": "_nixpkgs_package",
+            "attributes": {
+              "unmangled_name": "wavepeek",
+              "attribute_path": "wavepeek",
+              "nix_file": "@@//nix:wavepeek.nix",
+              "nix_file_deps": {},
+              "nix_file_content": "",
+              "repository": "@@rules_nixpkgs_core~~_nix_repo~~~nix_repo~nixpkgs//:nixpkgs",
+              "repositories": {},
+              "build_file": "@@//nix:wavepeek.BUILD",
+              "build_file_content": "",
+              "nixopts": [],
+              "quiet": false,
+              "fail_not_supported": true
+            }
           }
         },
         "moduleExtensionMetadata": {
@@ -216,7 +251,9 @@
             "icestorm",
             "apicula",
             "openfpgaloader",
-            "verilator_env"
+            "surfer",
+            "verilator_env",
+            "wavepeek"
           ],
           "explicitRootModuleDirectDevDeps": [],
           "useAllRepos": "NO",
