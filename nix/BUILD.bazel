@@ -1,0 +1,6 @@
+# Makes //nix a package so the per-tool build_file labels ("//nix:yosys.BUILD",
+# ...) and the verilator_env Nix expression resolve.
+exports_files(glob([
+    "*.BUILD",
+    "*.nix",
+]))

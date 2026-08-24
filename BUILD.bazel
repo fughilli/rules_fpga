@@ -1,0 +1,8 @@
+# Root package. rules_fpga has no root-level targets; the ruleset lives under
+# //fpga/... and examples under //examples/...
+package(default_visibility = ["//visibility:public"])
+
+exports_files([
+    "MODULE.bazel",
+    "flake.nix",
+])

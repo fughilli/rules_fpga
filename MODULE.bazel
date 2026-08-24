@@ -1,0 +1,122 @@
+"""Bazel (bzlmod) module: rules for building FPGA bitstreams from Verilog.
+
+The open-source FPGA toolchains (yosys, nextpnr, project icestorm, apicula,
+openFPGALoader, verilator) are supplied hermetically by Nix via rules_nixpkgs.
+Bazel drives `nix` itself at repo-fetch time, so on any machine with Nix
+installed a bare `bazel build //...` realizes every tool -- no `nix develop`, no
+host tools on PATH.
+
+Toolchain selection between the ice40 and gowin flows is done with Bazel's
+toolchain system, keyed on a `//fpga/constraints:family` constraint that each
+board platform declares (see //fpga/toolchains and //fpga/platforms).
+
+Organization mirrors github.com/fughilli/embedded: a thin nixpkgs pin, per-tool
+derivations imported as Bazel repos, and hand-written toolchains + platforms.
+"""
+
+module(
+    name = "rules_fpga",
+    version = "0.0.0",
+    compatibility_level = 1,
+)
+
+# --- Core rule sets (pinned; verified against BCR versions used by embedded) --
+bazel_dep(name = "platforms", version = "1.1.0")
+bazel_dep(name = "bazel_skylib", version = "1.9.0")
+
+# Only the *core* rules_nixpkgs module is on the BCR. We do not use
+# rules_nixpkgs_cc -- Verilator brings its own C++ compile via the Nix-provided
+# gcc/gnumake in the `verilator_env` bundle.
+bazel_dep(name = "rules_nixpkgs_core", version = "0.13.0")
+
+# ---------------------------------------------------------------------------
+# Nix: one nixpkgs repo, then individual tool derivations imported as repos.
+# isolate = True scopes these repos to this module so downstream modules that
+# take rules_fpga as a bazel_dep don't collide; consumers enable
+# --experimental_isolated_extension_usages (see .bazelrc).
+# ---------------------------------------------------------------------------
+nix_repo = use_extension(
+    "@rules_nixpkgs_core//extensions:repository.bzl",
+    "nix_repo",
+    isolate = True,
+)
+
+# Pinned nixos-25.11 commit. Keep in sync with flake.nix's nixpkgs input.
+nix_repo.github(
+    name = "nixpkgs",
+    commit = "b6018f87da91d19d0ab4cf979885689b469cdd41",
+    org = "NixOS",
+    repo = "nixpkgs",
+)
+use_repo(nix_repo, "nixpkgs")
+
+nix_pkg = use_extension(
+    "@rules_nixpkgs_core//extensions:package.bzl",
+    "nix_pkg",
+    isolate = True,
+)
+
+# Synthesis (both families).
+nix_pkg.attr(
+    name = "yosys",
+    attr = "yosys",
+    build_file = "//nix:yosys.BUILD",
+    repo = "@nixpkgs",
+)
+
+# Place & route. The nixpkgs `nextpnr` builds all architectures, so the same
+# repo provides both nextpnr-ice40 and nextpnr-himbaechel (gowin).
+nix_pkg.attr(
+    name = "nextpnr",
+    attr = "nextpnr",
+    build_file = "//nix:nextpnr.BUILD",
+    repo = "@nixpkgs",
+)
+
+# Project IceStorm: icepack (bitstream) + iceprog (flash) for ice40.
+nix_pkg.attr(
+    name = "icestorm",
+    attr = "icestorm",
+    build_file = "//nix:icestorm.BUILD",
+    repo = "@nixpkgs",
+)
+
+# Project Apicula: gowin_pack (bitstream) for Gowin.
+nix_pkg.attr(
+    name = "apicula",
+    attr = "apicula",
+    build_file = "//nix:apicula.BUILD",
+    repo = "@nixpkgs",
+)
+
+# openFPGALoader: flashing for Gowin / Tang Nano and many others.
+nix_pkg.attr(
+    name = "openfpgaloader",
+    attr = "openfpgaloader",
+    build_file = "//nix:openfpgaloader.BUILD",
+    repo = "@nixpkgs",
+)
+
+# Verilator + its C++ build deps (gcc, gnumake, perl) merged into one bin/ tree,
+# so `--binary` mode works from a single PATH entry inside the test sandbox.
+nix_pkg.file(
+    name = "verilator_env",
+    attr = "verilator-env",
+    build_file = "//nix:verilator_env.BUILD",
+    file = "//nix:verilator_env.nix",
+    repo = "@nixpkgs",
+)
+use_repo(
+    nix_pkg,
+    "apicula",
+    "icestorm",
+    "nextpnr",
+    "openfpgaloader",
+    "verilator_env",
+    "yosys",
+)
+
+register_toolchains(
+    "//fpga/toolchains:ice40_toolchain",
+    "//fpga/toolchains:gowin_toolchain",
+)

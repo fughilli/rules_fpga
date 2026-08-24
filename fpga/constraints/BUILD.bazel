@@ -1,0 +1,35 @@
+"""Constraints used for FPGA toolchain resolution and board selection.
+
+  * `family` (ice40 | gowin) picks the toolchain in //fpga/toolchains.
+  * `board`  (one value per board) drives the //fpga/boards:current select.
+
+A board platform declares one value from each setting (see //fpga/platforms).
+"""
+
+package(default_visibility = ["//visibility:public"])
+
+# Tool family -- selects the ice40 vs gowin toolchain.
+constraint_setting(name = "family")
+
+constraint_value(
+    name = "ice40",
+    constraint_setting = ":family",
+)
+
+constraint_value(
+    name = "gowin",
+    constraint_setting = ":family",
+)
+
+# Specific board -- selects device parameters via //fpga/boards:current.
+constraint_setting(name = "board")
+
+constraint_value(
+    name = "board_icebreaker",
+    constraint_setting = ":board",
+)
+
+constraint_value(
+    name = "board_tangnano9k",
+    constraint_setting = ":board",
+)

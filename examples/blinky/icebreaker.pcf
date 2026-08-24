@@ -1,0 +1,5 @@
+# iCEBreaker (iCE40 UP5K, SG48) pin constraints for blinky.
+# 12 MHz onboard oscillator.
+set_io clk 35
+# Onboard red user LED (LEDR_N), active low.
+set_io led 11

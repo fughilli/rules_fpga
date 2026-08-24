@@ -1,0 +1,58 @@
+"""Example: one Verilog design, simulated with Verilator and built into
+bitstreams for two very different boards (iCE40 iCEBreaker and Gowin Tang Nano
+9K) from the same verilog_top."""
+
+load(
+    "//fpga/rules:defs.bzl",
+    "fpga_flash",
+    "synthesizable_bitstream",
+    "verilog_library",
+    "verilog_test",
+    "verilog_top",
+)
+
+package(default_visibility = ["//visibility:public"])
+
+verilog_library(
+    name = "blinky",
+    srcs = ["blinky.v"],
+)
+
+verilog_top(
+    name = "blinky_top",
+    top = "blinky",
+    deps = [":blinky"],
+)
+
+verilog_test(
+    name = "blinky_test",
+    tb = "blinky_tb.v",
+    top = "blinky_tb",
+    deps = [":blinky"],
+)
+
+# --- iCEBreaker (iCE40) ----------------------------------------------------
+synthesizable_bitstream(
+    name = "blinky_icebreaker",
+    constraints = "icebreaker.pcf",
+    platform = "//fpga/platforms:icebreaker",
+    top = ":blinky_top",
+)
+
+fpga_flash(
+    name = "blinky_icebreaker_flash",
+    bitstream = ":blinky_icebreaker",
+)
+
+# --- Tang Nano 9K (Gowin) --------------------------------------------------
+synthesizable_bitstream(
+    name = "blinky_tangnano9k",
+    constraints = "tangnano9k.cst",
+    platform = "//fpga/platforms:tangnano9k",
+    top = ":blinky_top",
+)
+
+fpga_flash(
+    name = "blinky_tangnano9k_flash",
+    bitstream = ":blinky_tangnano9k",
+)

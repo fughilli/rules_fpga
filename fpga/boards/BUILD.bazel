@@ -1,0 +1,42 @@
+"""Per-board device parameters (FpgaBoardInfo) + the platform->info select.
+
+`current` is the implicit `_board` dep of synthesizable_bitstream. Because the
+rule transitions --platforms to the target board, this select resolves to that
+board's parameters. Adding a board = add its constraint_value (//fpga/constraints),
+its platform (//fpga/platforms), an fpga_board_info here, and a select case below.
+"""
+
+load("//fpga/rules:defs.bzl", "fpga_board_info")
+
+package(default_visibility = ["//visibility:public"])
+
+# iCEBreaker: iCE40 UP5K in the SG48 package, 12 MHz onboard oscillator.
+fpga_board_info(
+    name = "icebreaker_info",
+    family = "ice40",
+    freq_mhz = "12",
+    package = "sg48",
+    part = "up5k",
+)
+
+# Tang Nano 9K: Gowin GW1NR-9 (LV9 QN88), packer device GW1N-9C, 27 MHz crystal.
+# openFPGALoader knows the board as "tangnano9k".
+fpga_board_info(
+    name = "tangnano9k_info",
+    family = "gowin",
+    flash_args = [
+        "-b",
+        "tangnano9k",
+    ],
+    freq_mhz = "27",
+    packer_device = "GW1N-9C",
+    part = "GW1NR-LV9QN88PC6/I5",
+)
+
+alias(
+    name = "current",
+    actual = select({
+        "//fpga/constraints:board_icebreaker": ":icebreaker_info",
+        "//fpga/constraints:board_tangnano9k": ":tangnano9k_info",
+    }),
+)

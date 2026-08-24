@@ -1,0 +1,20 @@
+# rules_fpga build configuration.
+
+# bzlmod is the only dependency model this ruleset uses.
+common --enable_bzlmod
+
+# The Nix extension usages in MODULE.bazel are declared with `isolate = True`
+# (so the tool repos are scoped to this module and can be consumed as a
+# bazel_dep). Isolated extension usages require this flag on Bazel 7.
+common --experimental_isolated_extension_usages
+
+# Toolchain resolution is how we pick ice40 vs gowin per target platform.
+build --incompatible_enable_platform_specific_config
+
+# The Nix-provided tools (yosys, nextpnr, verilator, ...) are real binaries in
+# /nix/store with absolute rpaths + baked-in data dirs (e.g. YOSYS_DATDIR). The
+# default linux-sandbox exposes the host root read-only, so those absolute
+# references resolve inside actions. Nothing else is needed for hermeticity:
+# `bazel build //...` on a machine with Nix installed realizes every tool.
+
+test --test_output=errors

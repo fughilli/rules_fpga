@@ -1,0 +1,8 @@
+// Tang Nano 9K (Gowin GW1NR-9C) pin constraints for blinky.
+// 27 MHz onboard crystal.
+IO_LOC "clk" 52;
+IO_PORT "clk" IO_TYPE=LVCMOS33 PULL_MODE=UP;
+
+// LED0 (of the 6-LED bank), active low.
+IO_LOC "led" 10;
+IO_PORT "led" IO_TYPE=LVCMOS33 DRIVE=8;

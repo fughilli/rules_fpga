@@ -1,0 +1,55 @@
+"""FPGA toolchain type + the ice40 and gowin implementations.
+
+The `toolchain()` wrappers are `target_compatible_with` their family
+constraint, so toolchain resolution -- run under a board platform via the
+synthesizable_bitstream transition -- automatically selects the right flow.
+Registered in MODULE.bazel.
+"""
+
+load(":defs.bzl", "fpga_toolchain")
+
+package(default_visibility = ["//visibility:public"])
+
+toolchain_type(name = "toolchain_type")
+
+# --- Lattice iCE40 (project icestorm) --------------------------------------
+fpga_toolchain(
+    name = "ice40_impl",
+    flash_files = "@icestorm//:all",
+    flash_tool = "@icestorm//:iceprog",
+    nextpnr = "@nextpnr//:nextpnr-ice40",
+    nextpnr_files = "@nextpnr//:all",
+    packer = "@icestorm//:icepack",
+    packer_files = "@icestorm//:all",
+    synth_command = "synth_ice40",
+    yosys = "@yosys//:yosys",
+    yosys_files = "@yosys//:all",
+)
+
+toolchain(
+    name = "ice40_toolchain",
+    target_compatible_with = ["//fpga/constraints:ice40"],
+    toolchain = ":ice40_impl",
+    toolchain_type = ":toolchain_type",
+)
+
+# --- Gowin (apicula / himbaechel) ------------------------------------------
+fpga_toolchain(
+    name = "gowin_impl",
+    flash_files = "@openfpgaloader//:all",
+    flash_tool = "@openfpgaloader//:openFPGALoader",
+    nextpnr = "@nextpnr//:nextpnr-himbaechel",
+    nextpnr_files = "@nextpnr//:all",
+    packer = "@apicula//:gowin_pack",
+    packer_files = "@apicula//:all",
+    synth_command = "synth_gowin",
+    yosys = "@yosys//:yosys",
+    yosys_files = "@yosys//:all",
+)
+
+toolchain(
+    name = "gowin_toolchain",
+    target_compatible_with = ["//fpga/constraints:gowin"],
+    toolchain = ":gowin_impl",
+    toolchain_type = ":toolchain_type",
+)

@@ -1,0 +1,25 @@
+"""Board platforms. Pass one of these to synthesizable_bitstream(platform = ...).
+
+Each platform pairs a `family` value (toolchain selection) with a `board` value
+(device-parameter selection via //fpga/boards:current).
+"""
+
+package(default_visibility = ["//visibility:public"])
+
+# Lattice iCEBreaker (iCE40 UP5K, SG48 package).
+platform(
+    name = "icebreaker",
+    constraint_values = [
+        "//fpga/constraints:ice40",
+        "//fpga/constraints:board_icebreaker",
+    ],
+)
+
+# Sipeed Tang Nano 9K (Gowin GW1NR-9C).
+platform(
+    name = "tangnano9k",
+    constraint_values = [
+        "//fpga/constraints:gowin",
+        "//fpga/constraints:board_tangnano9k",
+    ],
+)

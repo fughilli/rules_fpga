@@ -1,0 +1,4 @@
+/bazel-*
+.direnv/
+result
+result-*
