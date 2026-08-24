@@ -9,7 +9,10 @@ common --enable_bzlmod
 common --experimental_isolated_extension_usages
 
 # Toolchain resolution is how we pick ice40 vs gowin per target platform.
-build --incompatible_enable_platform_specific_config
+# (--incompatible_enable_platform_specific_config used to be set here; it
+# graduated to default-on and was REMOVED in Bazel 7, so on the pinned 7.4.1 it
+# is a hard "Unrecognized option" error that fails every build/info invocation.
+# The behavior it gated is still active -- nothing replaces the flag.)
 
 # The Nix-provided tools (yosys, nextpnr, verilator, ...) are real binaries in
 # /nix/store with absolute rpaths + baked-in data dirs (e.g. YOSYS_DATDIR). The
@@ -18,3 +21,11 @@ build --incompatible_enable_platform_specific_config
 # `bazel build //...` on a machine with Nix installed realizes every tool.
 
 test --test_output=errors
+
+# Some Bazel/bundled-JDK combos emit SVE instructions that crash the JVM with
+# SIGILL at server startup on certain aarch64 hosts -- including the aarch64
+# claude-container image, where `bazel query` dies before loading anything
+# ("Server crashed during startup ... SIGILL ... java.lang.System.registerNatives").
+# Disabling SVE in the host JVM fixes it and is a no-op on hosts without SVE, so
+# it is set unconditionally rather than behind a --config.
+startup --host_jvm_args=-XX:UseSVE=0

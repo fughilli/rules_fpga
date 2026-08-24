@@ -26,6 +26,7 @@ verilog_top(
 
 verilog_test(
     name = "blinky_test",
+    size = "small",
     tb = "blinky_tb.v",
     top = "blinky_tb",
     deps = [":blinky"],

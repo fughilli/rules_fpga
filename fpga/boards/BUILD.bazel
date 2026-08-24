@@ -35,8 +35,16 @@ fpga_board_info(
 
 alias(
     name = "current",
-    actual = select({
-        "//fpga/constraints:board_icebreaker": ":icebreaker_info",
-        "//fpga/constraints:board_tangnano9k": ":tangnano9k_info",
-    }),
+    # In real builds synthesizable_bitstream transitions --platforms to a board,
+    # so one of the board conditions always matches. The default only applies
+    # when `current` is analyzed with no board platform (e.g. plain
+    # `bazel build //...`); it keeps the alias analyzable standalone and is never
+    # hit through the rule (the transitioned condition always wins).
+    actual = select(
+        {
+            "//fpga/constraints:board_icebreaker": ":icebreaker_info",
+            "//fpga/constraints:board_tangnano9k": ":tangnano9k_info",
+            "//conditions:default": ":icebreaker_info",
+        },
+    ),
 )

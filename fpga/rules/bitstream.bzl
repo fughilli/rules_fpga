@@ -88,6 +88,9 @@ def _nextpnr(ctx, tc, board, netlist, constraints):
         args = [
             "--device",
             board.part,
+            # himbaechel-gowin needs the chip family in addition to the part.
+            "--vopt",
+            "family=" + board.packer_device,
             "--vopt",
             "cst=" + constraints.path,
             "--json",

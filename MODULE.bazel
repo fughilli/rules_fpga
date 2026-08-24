@@ -81,10 +81,11 @@ nix_pkg.attr(
     repo = "@nixpkgs",
 )
 
-# Project Apicula: gowin_pack (bitstream) for Gowin.
+# Project Apicula: gowin_pack (bitstream) for Gowin. Shipped as the `apycula`
+# Python package (top-level `apicula`/`apycula` attrs don't exist in this pin).
 nix_pkg.attr(
     name = "apicula",
-    attr = "apicula",
+    attr = "python3Packages.apycula",
     build_file = "//nix:apicula.BUILD",
     repo = "@nixpkgs",
 )

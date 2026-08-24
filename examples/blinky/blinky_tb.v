@@ -1,6 +1,8 @@
-// Verilator testbench for `blinky`. Drives the clock and checks that the LED
-// output is a valid level and actually toggles over the counter period. Ends in
-// $finish on success; $fatal (non-zero exit) fails the Bazel test.
+// Testbench for `blinky`, simulated with Verilator. Drives the clock and checks
+// that the LED output is a valid level and actually toggles over the counter
+// period. Ends in $finish on success; $fatal (non-zero exit) fails the test.
+// (Keep the first word off "verilator" -- Verilator reads a leading `verilator`
+// in a comment as a metacomment pragma.)
 `timescale 1ns / 1ps
 
 module blinky_tb;
