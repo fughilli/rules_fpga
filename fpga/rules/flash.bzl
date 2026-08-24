@@ -34,8 +34,11 @@ if [[ ! -d "$R" && -n "${{RUNFILES_DIR:-}}" ]]; then
 fi
 TOOL="$R/{tool}"
 BIT="$R/{bit}"
-echo "Flashing $BIT with $(basename "$TOOL") {flags}" >&2
-exec "$TOOL" {flags} "$BIT"
+# `bazel run :x_flash -- <extra>` forwards <extra> to the tool (before the
+# bitstream, which openFPGALoader/iceprog take positionally last). E.g. `-- -f`
+# to write the Tang Nano's SPI flash instead of loading volatile SRAM.
+echo "Flashing $BIT with $(basename "$TOOL") {flags} $*" >&2
+exec "$TOOL" {flags} "$@" "$BIT"
 """.format(
             tool = _runfiles_path(ctx, tool),
             bit = _runfiles_path(ctx, bit),
@@ -55,7 +58,9 @@ def _shquote(s):
 fpga_flash = rule(
     implementation = _fpga_flash_impl,
     executable = True,
-    doc = "Runnable target that programs a synthesizable_bitstream onto hardware.",
+    doc = "Runnable target that programs a synthesizable_bitstream onto hardware. " +
+          "Extra `bazel run ... -- <args>` are forwarded to the flash tool " +
+          "(e.g. `-- -f` to write SPI flash instead of loading SRAM).",
     attrs = {
         "bitstream": attr.label(
             mandatory = True,
