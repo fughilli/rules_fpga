@@ -22,9 +22,9 @@ verilog_top(
     deps = [":led_cycle"],
 )
 
-# Emits led_cycle_sim_test (Verilator validation), led_cycle_sim_trace (the .vcd
-# waveform artifact), led_cycle_sim_surfer (open in Surfer) and
-# led_cycle_sim_wavepeek (query with wavepeek).
+# Emits led_cycle_sim.test (Verilator validation), led_cycle_sim.trace (the .vcd
+# waveform artifact), led_cycle_sim.surfer (open in Surfer) and
+# led_cycle_sim.wavepeek (query with wavepeek).
 verilog_sim(
     name = "led_cycle_sim",
     tb = "led_cycle_tb.v",

@@ -219,10 +219,10 @@ def verilog_sim(name, top, tb, deps = [], srcs = [], defines = [], format = "vcd
     """test + trace + surfer + wavepeek for one testbench.
 
     Emits:
-      <name>_test     -- verilog_test (validation)
-      <name>_trace    -- verilog_trace (waveform artifact)
-      <name>_surfer   -- open the trace in Surfer
-      <name>_wavepeek -- query the trace with wavepeek
+      <name>.test     -- verilog_test (validation)
+      <name>.trace    -- verilog_trace (waveform artifact)
+      <name>.surfer   -- open the trace in Surfer
+      <name>.wavepeek -- query the trace with wavepeek
 
     Args:
       name: base name for the generated targets.
@@ -237,7 +237,7 @@ def verilog_sim(name, top, tb, deps = [], srcs = [], defines = [], format = "vcd
     """
     common = dict(top = top, tb = tb, deps = deps, srcs = srcs, defines = defines)
 
-    verilog_test(name = name + "_test", size = size, **common)
-    verilog_trace(name = name + "_trace", format = format, **common)
-    surfer(name = name + "_surfer", trace = ":" + name + "_trace", **kwargs)
-    wavepeek(name = name + "_wavepeek", trace = ":" + name + "_trace")
+    verilog_test(name = name + ".test", size = size, **common)
+    verilog_trace(name = name + ".trace", format = format, **common)
+    surfer(name = name + ".surfer", trace = ":" + name + ".trace", **kwargs)
+    wavepeek(name = name + ".wavepeek", trace = ":" + name + ".trace")

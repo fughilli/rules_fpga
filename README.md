@@ -46,8 +46,8 @@ fpga_flash(name = "blinky_tangnano9k_flash", bitstream = ":blinky_tangnano9k")
 - **`verilog_trace`** — run the sim and capture a waveform artifact (`.vcd`/`.fst`).
 - **`surfer`** / **`wavepeek`** — `bazel run` a trace into the Surfer viewer, or
   query it with the agent-oriented [wavepeek](https://github.com/kleverhq/wavepeek) CLI.
-- **`verilog_sim`** — one macro that wires all four (`_test` / `_trace` / `_surfer`
-  / `_wavepeek`) for a single testbench.
+- **`verilog_sim`** — one macro that wires all four (`.test` / `.trace` / `.surfer`
+  / `.wavepeek`) for a single testbench.
 - **`synthesizable_bitstream`** — synth → P&R → pack for the `platform`'s board.
   The `platform` drives a transition that both selects the toolchain family and
   resolves the board's device parameters. `constraints` is the `.pcf`/`.cst`.
@@ -82,16 +82,16 @@ same tb stays fast under `verilog_test`, which doesn't compile tracing in):
 Then:
 
 ```sh
-bazel test  //examples/led_cycle:led_cycle_sim_test       # validate
-bazel build //examples/led_cycle:led_cycle_sim_trace      # → led_cycle_sim_trace.vcd
-bazel run   //examples/led_cycle:led_cycle_sim_surfer      # open in Surfer (needs a display)
+bazel test  //examples/led_cycle:led_cycle_sim.test       # validate
+bazel build //examples/led_cycle:led_cycle_sim.trace      # → led_cycle_sim.trace.vcd
+bazel run   //examples/led_cycle:led_cycle_sim.surfer      # open in Surfer (needs a display)
 #   ...or serve it headless for a remote Surfer:  surfer(server = True) → uses `surver`
 
 # Query the trace — args after `--` pass through; --waves is filled in for you:
-bazel run //examples/led_cycle:led_cycle_sim_wavepeek -- info
-bazel run //examples/led_cycle:led_cycle_sim_wavepeek -- signal --scope led_cycle_tb
-bazel run //examples/led_cycle:led_cycle_sim_wavepeek -- value --signals led_cycle_tb.led --at 90ns
-bazel run //examples/led_cycle:led_cycle_sim_wavepeek -- \
+bazel run //examples/led_cycle:led_cycle_sim.wavepeek -- info
+bazel run //examples/led_cycle:led_cycle_sim.wavepeek -- signal --scope led_cycle_tb
+bazel run //examples/led_cycle:led_cycle_sim.wavepeek -- value --signals led_cycle_tb.led --at 90ns
+bazel run //examples/led_cycle:led_cycle_sim.wavepeek -- \
     change --on 'posedge led_cycle_tb.clk' --signals led_cycle_tb.led --row-mode sparse
 ```
 
