@@ -111,12 +111,14 @@ def _split_sources(ctx, gen):
     return gen_srcs, gen_hdrs
 
 def _build_exe(ctx, gen, trace_mode):
-    """Compile the generated model + Verilator runtime, then link an executable.
+    """Compile the model + Verilator runtime per file, then link an executable.
 
-    cc_common.compile ignores tree-artifact sources, and the verilated file set
-    is dynamic, so the model + runtime .cpp are compiled to an object *tree* by a
-    single g++ action (the cc_toolchain's compiler). cc_common.link then links
-    that object tree with the toolchain (crt/libstdc++/rpath handled for us).
+    The fixed runtime .cpp compile individually (cached across every sim). The
+    dynamic model .cpp go through cc_common.compile as a tree artifact, which
+    Bazel compiles with a CppCompileActionTemplate -- one spawn per generated
+    file, each content-cached -- so a small Verilog edit only recompiles the few
+    generated files that actually changed. cc_common.link links it all (with the
+    toolchain handling crt/libstdc++/rpath).
     """
     gen_srcs, gen_hdrs = _split_sources(ctx, gen)
     cc_toolchain = find_cc_toolchain(ctx)
@@ -129,58 +131,41 @@ def _build_exe(ctx, gen, trace_mode):
 
     # Runtime sources + FST-only zlib wiring, keyed on trace mode.
     runtime = list(ctx.files._runtime_base)
-    compile_inputs = list(ctx.files._verilator_headers) + ctx.files._verilator_aux
-    include_flags = []
+    private_hdrs = list(ctx.files._verilator_headers)
+    system_includes = []
     link_flags = []
     link_inputs = []
     if trace_mode == "vcd":
         runtime += ctx.files._runtime_vcd
     elif trace_mode == "fst":
         runtime += ctx.files._runtime_fst
-        compile_inputs += ctx.files._zlib_headers
-        include_flags.append("-I" + _dir_of(ctx.files._zlib_headers, "zlib.h"))
+        private_hdrs += ctx.files._zlib_headers
+        system_includes.append(_dir_of(ctx.files._zlib_headers, "zlib.h"))
 
         # Statically link libz.a (positional), so the sim exe needs no runtime .so.
         link_flags.append(ctx.files._zlib_lib[0].path)
         link_inputs = ctx.files._zlib_lib
 
     inc = _dir_of(ctx.files._runtime_base, "verilated.cpp")
-    include_flags = [
-        "-I" + gen_hdrs.path,
-        "-I" + inc,
-        "-I" + inc + "/vltstd",
-    ] + include_flags
-    define_flags = ["-D" + d for d in _BASE_DEFINES + _TRACE_DEFINES[trace_mode]]
-
-    # Compile model (tree) + runtime (files) -> object tree, using the toolchain g++.
-    objs = ctx.actions.declare_directory(ctx.label.name + ".objs")
-    cxx = ctx.file._cxx
-    flags = " ".join(include_flags + define_flags + ["-std=gnu++20", "-fcoroutines", "-Os", "-Wno-attributes"])
-    runtime_paths = " ".join(['"%s"' % f.path for f in runtime])
-    ctx.actions.run_shell(
-        inputs = depset(
-            direct = [gen_srcs, gen_hdrs] + runtime + compile_inputs,
-            transitive = [ctx.attr._cc_all.files],
-        ),
-        outputs = [objs],
-        command = ('set -e; mkdir -p "{o}"; ' +
-                   'for f in "{s}"/*.cpp {rt}; do ' +
-                   '"{cxx}" -c {flags} "$f" -o "{o}/$(basename "$f").o"; done').format(
-            o = objs.path,
-            s = gen_srcs.path,
-            rt = runtime_paths,
-            cxx = cxx.path,
-            flags = flags,
-        ),
-        mnemonic = "VerilatorCompile",
-        progress_message = "Compiling %s model + runtime" % ctx.label,
+    _, compilation_outputs = cc_common.compile(
+        actions = ctx.actions,
+        feature_configuration = feature_config,
+        cc_toolchain = cc_toolchain,
+        name = ctx.label.name,
+        srcs = [gen_srcs] + runtime,
+        private_hdrs = private_hdrs,
+        additional_inputs = ctx.files._verilator_aux + [gen_hdrs],
+        includes = [gen_hdrs.path, inc, inc + "/vltstd"],
+        system_includes = system_includes,
+        defines = _BASE_DEFINES + _TRACE_DEFINES[trace_mode],
+        user_compile_flags = ["-std=gnu++20", "-fcoroutines", "-Os", "-Wno-attributes"],
     )
 
     linking_outputs = cc_common.link(
         actions = ctx.actions,
         feature_configuration = feature_config,
         cc_toolchain = cc_toolchain,
-        compilation_outputs = cc_common.create_compilation_outputs(objects = depset([objs])),
+        compilation_outputs = compilation_outputs,
         name = ctx.label.name,
         output_type = "executable",
         user_link_flags = link_flags,
@@ -208,8 +193,6 @@ _SIM_ATTRS = {
     "_verilator_aux": attr.label(default = "@verilator_env//:aux_srcs", allow_files = True),
     "_zlib_headers": attr.label(default = "@verilator_env//:zlib_headers", allow_files = True),
     "_zlib_lib": attr.label(default = "@verilator_env//:zlib_lib", allow_files = True),
-    "_cxx": attr.label(default = "@cc_toolchain//:cxx", allow_single_file = True, cfg = "exec"),
-    "_cc_all": attr.label(default = "@cc_toolchain//:all", cfg = "exec"),
 }
 
 def _verilog_test_impl(ctx):

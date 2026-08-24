@@ -16,11 +16,6 @@ filegroup(
     ),
 )
 
-filegroup(
-    name = "cxx",
-    srcs = ["bin/g++"],
-)
-
 nix_cc_toolchain_config(name = "nix_cc_config")
 
 cc_toolchain(
