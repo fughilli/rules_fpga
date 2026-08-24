@@ -23,8 +23,15 @@ verilog_trace (which verilates with --trace + `+define+TRACE`):
     `endif
 """
 
-load("@rules_cc//cc:find_cc_toolchain.bzl", "find_cc_toolchain", "use_cc_toolchain")
 load(":providers.bzl", "VerilogInfo", "VerilogTraceInfo")
+
+# Dedicated cc toolchain type (not @bazel_tools//tools/cpp) so this ruleset's Nix
+# cc toolchain never hijacks a consumer repo's host C++ resolution.
+_CC_TOOLCHAIN_TYPE = "//fpga/toolchains/cc:toolchain_type"
+
+def _find_cc_toolchain(ctx):
+    tc = ctx.toolchains[_CC_TOOLCHAIN_TYPE]
+    return tc.cc if hasattr(tc, "cc") else tc
 
 # ---------------------------------------------------------------------------
 # Verilate (--cc --main) -> compile+link with Bazel's cc toolchain.
@@ -121,7 +128,7 @@ def _build_exe(ctx, gen, trace_mode):
     toolchain handling crt/libstdc++/rpath).
     """
     gen_srcs, gen_hdrs = _split_sources(ctx, gen)
-    cc_toolchain = find_cc_toolchain(ctx)
+    cc_toolchain = _find_cc_toolchain(ctx)
     feature_config = cc_common.configure_features(
         ctx = ctx,
         cc_toolchain = cc_toolchain,
@@ -217,7 +224,7 @@ verilog_test = rule(
     test = True,
     doc = "Verilator simulation of a (System)Verilog testbench, built with Bazel's cc toolchain.",
     attrs = _SIM_ATTRS,
-    toolchains = use_cc_toolchain(),
+    toolchains = [_CC_TOOLCHAIN_TYPE],
     fragments = ["cpp"],
 )
 
@@ -248,7 +255,7 @@ verilog_trace = rule(
         values = ["vcd", "fst"],
         doc = "Waveform format.",
     )),
-    toolchains = use_cc_toolchain(),
+    toolchains = [_CC_TOOLCHAIN_TYPE],
     fragments = ["cpp"],
 )
 

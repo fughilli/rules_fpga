@@ -157,5 +157,7 @@ use_repo(
 register_toolchains(
     "//fpga/toolchains:ice40_toolchain",
     "//fpga/toolchains:gowin_toolchain",
-    "@cc_toolchain//:nix_cc_toolchain",
+    # Registered under //fpga/toolchains/cc:toolchain_type (a dedicated type), so
+    # it never hijacks a consumer's host C++ toolchain resolution.
+    "//fpga/toolchains/cc:nix_cc_toolchain",
 )
